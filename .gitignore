@@ -1,0 +1,9 @@
+# Environment variable
+.env/
+
+# virtual environment
+myenv/
+
+
+#DVC
+/data
