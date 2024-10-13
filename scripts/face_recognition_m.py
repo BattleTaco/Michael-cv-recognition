@@ -8,7 +8,6 @@ import face_recognition
 from torchvision import transforms
 from dotenv import load_dotenv
 
-
 # Define a simple neural network for face recognition
 class FaceRecognitionModel(nn.Module):
     def __init__(self, input_size=128, num_classes=2):
@@ -55,7 +54,7 @@ class FaceRecognitionSystem:
             raise RuntimeError("No face encodings were found. Please check your dataset.")
 
         # Convert encodings and labels to torch tensors
-        self.encodings = torch.tensor(self.encodings)
+        self.encodings = torch.tensor(np.array(self.encodings), dtype=torch.float32)  # Ensure float32 dtype
 
         # Check encoding tensor shape
         print(f"Encodings shape: {self.encodings.shape}")  # This should be (num_samples, 128)
@@ -87,7 +86,6 @@ class FaceRecognitionSystem:
             if (epoch + 1) % 10 == 0:
                 print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
 
-
     def save_model(self, file_path="face_recognition_model.pth"):
         """Save the trained model to disk."""
         torch.save(self.model.state_dict(), file_path)
@@ -99,13 +97,44 @@ class FaceRecognitionSystem:
 
     def recognize_faces(self, frame):
         """Recognize faces in a frame using the trained model."""
-        rgb_frame = frame[:, :, ::-1]
+        rgb_frame = frame[:, :, ::-1]  # Convert BGR (OpenCV format) to RGB (for face_recognition)
+
+        # Detect face locations (bounding boxes)
         face_locations = face_recognition.face_locations(rgb_frame)
+
+        if len(face_locations) == 0:
+            print("No face locations detected in the frame.")
+            return []
+
+        print(f"Face locations: {face_locations}")
+
+        # Get face landmarks for each face detected
+        face_landmarks_list = face_recognition.face_landmarks(rgb_frame, face_locations)
+
+        if len(face_landmarks_list) == 0:
+            print("No face landmarks detected.")
+            return []
+
+        print(f"Face landmarks: {face_landmarks_list}")
+
+        # Get face encodings for each face detected using the landmarks
         face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
+        if len(face_encodings) == 0:
+            print("No face encodings detected.")
+            return []
+
+        print(f"Face encodings: {face_encodings}")
+
         recognized_faces = []
+
+        # Process each face found in the current frame
         for face_encoding, face_location in zip(face_encodings, face_locations):
-            face_encoding_tensor = torch.tensor(face_encoding).unsqueeze(0)
+            # Convert the encoding to a PyTorch tensor
+            face_encoding_tensor = torch.tensor(face_encoding, dtype=torch.float32).unsqueeze(0)
+
+            # Ensure the tensor is of the correct shape
+            print(f"Face encoding tensor shape: {face_encoding_tensor.shape}")
 
             # Pass the encoding through the model
             with torch.no_grad():
@@ -116,6 +145,9 @@ class FaceRecognitionSystem:
 
         return recognized_faces
 
+
+
+
 class FaceRecognitionApp:
     def __init__(self, model):
         self.model = model
@@ -124,39 +156,36 @@ class FaceRecognitionApp:
         """Capture video from the webcam and recognize faces in real time."""
         video_capture = cv2.VideoCapture(0)
 
-        while True:
-            ret, frame = video_capture.read()
+        try:
+            while True:
+                ret, frame = video_capture.read()
 
-            # Recognize faces in the current frame
-            recognized_faces = self.model.recognize_faces(frame)
+                # Recognize faces in the current frame
+                recognized_faces = self.model.recognize_faces(frame)
 
-            # Display results: draw bounding boxes and names
-            for name, (top, right, bottom, left) in recognized_faces:
-                # Draw a box around the face
-                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                # Draw bounding boxes and labels on the frame
+                for name, (top, right, bottom, left) in recognized_faces:
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
+                    font = cv2.FONT_HERSHEY_DUPLEX
+                    cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
 
-                # Draw a label with a name below the face
-                cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
-                font = cv2.FONT_HERSHEY_DUPLEX
-                cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+                # Display the resulting image
+                cv2.imshow('Video', frame)
 
-            # Display the resulting image
-            cv2.imshow('Video', frame)
-
-            # Exit if 'q' is pressed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        # Release video capture and close window
-        video_capture.release()
-        cv2.destroyAllWindows()
+                # Exit if 'q' is pressed
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        finally:
+            # Release video capture and close window
+            video_capture.release()
+            cv2.destroyAllWindows()
 
 def main():
     # Create a face recognition system
     load_dotenv()
-    # Retrieve the image path from the .env file
-    dataset_dir = 'C:/Users/Michael Ramirez/Documents/GitHub/Michael CV Recognition/data/michael_face/'
-    print(dataset_dir)
+    dataset_dir = os.getenv("DATASET_DIR", "C:/Users/Michael Ramirez/Documents/GitHub/Michael CV Recognition/data/")
+    print(f"Dataset directory: {dataset_dir}")
     num_classes = 2  # Michael and Rachel
     face_recognition_system = FaceRecognitionSystem(dataset_dir, num_classes)
 
