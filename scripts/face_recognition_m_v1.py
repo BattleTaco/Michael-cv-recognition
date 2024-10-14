@@ -66,7 +66,7 @@ class FaceRecognitionSystem:
         # Check labels shape
         print(f"Labels shape: {self.labels.shape}")  # Should match the number of encodings
 
-    def train(self, epochs=100):
+    def train(self, epochs=200):
         """Train the PyTorch model on the face encodings."""
         # Check if the encodings tensor has a valid shape
         if self.encodings.size(1) != 128:
@@ -134,9 +134,7 @@ class FaceRecognitionSystem:
             with torch.no_grad():
                 outputs = self.model(face_encoding_tensor)
                 _, predicted = torch.max(outputs.data, 1)
-
-                # Assuming "Michael" is recognized by the model
-                name = "Michael"
+                name = list(self.label_map.keys())[predicted.item()]
                 recognized_faces.append((name, face_location))
 
         return recognized_faces
@@ -190,7 +188,7 @@ def main():
 
     # Train the model
     print("Training the model...")
-    face_recognition_system.train(epochs=100)
+    face_recognition_system.train(epochs=200)
 
     # Save the trained model (optional)
     face_recognition_system.save_model("face_recognition_model.pth")
